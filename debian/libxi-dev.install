@@ -1,0 +1,4 @@
+usr/lib/libXi.a
+usr/lib/libXi.so
+usr/lib/pkgconfig/xi.pc
+usr/include/X11/extensions/

@@ -173,6 +173,63 @@ static char *XInputErrorList[] = {
     "BadClass, invalid event class",	/* BadClass */
 };
 
+/* Get the version supported by the server to know which number of
+* events are support. Otherwise, a wrong number of events may smash
+* the Xlib-internal event processing vector.
+*
+* Since the extension hasn't been initialized yet, we need to
+* manually get the opcode, then the version.
+*/
+static int
+_XiFindEventsSupported(Display *dpy)
+{
+    XExtCodes codes;
+    XExtensionVersion *extversion = NULL;
+    int nevents = 0;
+
+    if (!XQueryExtension(dpy, INAME, &codes.major_opcode,
+                         &codes.first_event, &codes.first_error))
+        goto out;
+
+    LockDisplay(dpy);
+    extversion = _XiGetExtensionVersionRequest(dpy, INAME, codes.major_opcode);
+    UnlockDisplay(dpy);
+    SyncHandle();
+
+    if (!extversion || !extversion->present)
+        goto out;
+
+    if (extversion->major_version >= 2)
+        nevents = IEVENTS; /* number is fixed, XI2 adds GenericEvents only */
+    else if (extversion->major_version <= 0)
+    {
+        printf("XInput_find_display: invalid extension version %d.%d\n",
+                extversion->major_version, extversion->minor_version);
+        goto out;
+    }
+    else
+    {
+        switch(extversion->minor_version)
+        {
+            case XI_Add_DeviceProperties_Minor:
+                nevents = XI_DevicePropertyNotify + 1;
+                break;
+            case  XI_Add_DevicePresenceNotify_Minor:
+                nevents = XI_DevicePresenceNotify + 1;
+                break;
+            default:
+                nevents = XI_DeviceButtonstateNotify + 1;
+                break;
+        }
+    }
+
+out:
+    if (extversion)
+        XFree(extversion);
+    return nevents;
+}
+
+
 _X_HIDDEN
 XExtDisplayInfo *XInput_find_display (Display *dpy)
 {
@@ -180,12 +237,17 @@ XExtDisplayInfo *XInput_find_display (Display *dpy)
     if (!xinput_info) { if (!(xinput_info = XextCreateExtension())) return NULL; }
     if (!(dpyinfo = XextFindDisplay (xinput_info, dpy)))
     {
+      int nevents = _XiFindEventsSupported(dpy);
+
       dpyinfo = XextAddDisplay (xinput_info, dpy,
                                 xinput_extension_name,
                                 &xinput_extension_hooks,
-                                IEVENTS, NULL);
-      XESetWireToEventCookie(dpy, dpyinfo->codes->major_opcode, XInputWireToCookie);
-      XESetCopyEventCookie(dpy, dpyinfo->codes->major_opcode, XInputCopyCookie);
+                                nevents, NULL);
+      if (dpyinfo->codes) /* NULL if XI doesn't exist on the server */
+      {
+          XESetWireToEventCookie(dpy, dpyinfo->codes->major_opcode, XInputWireToCookie);
+          XESetCopyEventCookie(dpy, dpyinfo->codes->major_opcode, XInputCopyCookie);
+      }
     }
     return dpyinfo;
 }
@@ -1287,6 +1349,7 @@ wireToDeviceEvent(xXIDeviceEvent *in, XGenericEventCookie* cookie)
     cookie->data = ptr_lib = malloc(len);
 
     out = next_block(&ptr_lib, sizeof(XIDeviceEvent));
+    out->display = cookie->display;
     out->type = in->type;
     out->extension = in->extension;
     out->evtype = in->evtype;
@@ -1486,6 +1549,7 @@ wireToDeviceChangedEvent(xXIDeviceChangedEvent *in, XGenericEventCookie *cookie)
     cookie->data = out = malloc(sizeof(XIDeviceChangedEvent) + len);
 
     out->type = in->type;
+    out->display = cookie->display;
     out->extension = in->extension;
     out->evtype = in->evtype;
     out->send_event = ((in->type & 0x80) != 0);
@@ -1515,6 +1579,7 @@ wireToHierarchyChangedEvent(xXIHierarchyEvent *in, XGenericEventCookie *cookie)
     cookie->data = out = malloc(sizeof(XIHierarchyEvent) + in->num_info * sizeof(XIHierarchyInfo));;
 
     out->info           = (XIHierarchyInfo*)&out[1];
+    out->display        = cookie->display;
     out->type           = in->type;
     out->extension      = in->extension;
     out->evtype         = in->evtype;
@@ -1557,6 +1622,7 @@ wireToRawEvent(xXIRawEvent *in, XGenericEventCookie *cookie)
 
     out = next_block(&ptr, sizeof(XIRawEvent));
     out->type           = in->type;
+    out->display        = cookie->display;
     out->extension      = in->extension;
     out->evtype         = in->evtype;
     out->send_event = ((in->type & 0x80) != 0);
@@ -1578,7 +1644,7 @@ wireToRawEvent(xXIRawEvent *in, XGenericEventCookie *cookie)
         out->valuators.values[i] = values->integral;
         out->valuators.values[i] += ((double)values->frac / (1 << 16) / (1 << 16));
         out->raw_values[i] = (values + bits)->integral;
-        out->valuators.values[i] += ((double)(values + bits)->frac / (1 << 16) / (1 << 16));
+        out->raw_values[i] += ((double)(values + bits)->frac / (1 << 16) / (1 << 16));
         values++;
     }
 
@@ -1600,6 +1666,7 @@ wireToEnterLeave(xXIEnterEvent *in, XGenericEventCookie *cookie)
     out->buttons.mask = (unsigned char*)&out[1];
 
     out->type           = in->type;
+    out->display        = cookie->display;
     out->extension      = in->extension;
     out->evtype         = in->evtype;
     out->send_event = ((in->type & 0x80) != 0);
