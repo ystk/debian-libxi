@@ -57,6 +57,7 @@ SOFTWARE.
 #include <X11/extensions/XInput.h>
 #include <X11/extensions/extutil.h>
 #include "XIint.h"
+#include <limits.h>
 
 XFeedbackState *
 XGetFeedbackControl(
@@ -64,8 +65,6 @@ XGetFeedbackControl(
     XDevice		*dev,
     int			*num_feedbacks)
 {
-    int size = 0;
-    int nbytes, i;
     XFeedbackState *Feedback = NULL;
     XFeedbackState *Sav = NULL;
     xFeedbackState *f = NULL;
@@ -89,11 +88,18 @@ XGetFeedbackControl(
 	return (XFeedbackState *) NULL;
     }
     if (rep.length > 0) {
+	unsigned long nbytes;
+	size_t size = 0;
+	int i;
+
 	*num_feedbacks = rep.num_feedbacks;
-	nbytes = (long)rep.length << 2;
-	f = (xFeedbackState *) Xmalloc((unsigned)nbytes);
+
+	if (rep.length < (INT_MAX >> 2)) {
+	    nbytes = rep.length << 2;
+	    f = Xmalloc(nbytes);
+	}
 	if (!f) {
-	    _XEatData(dpy, (unsigned long)nbytes);
+	    _XEatDataWords(dpy, rep.length);
 	    UnlockDisplay(dpy);
 	    SyncHandle();
 	    return (XFeedbackState *) NULL;
@@ -102,6 +108,10 @@ XGetFeedbackControl(
 	_XRead(dpy, (char *)f, nbytes);
 
 	for (i = 0; i < *num_feedbacks; i++) {
+	    if (f->length > nbytes)
+		goto out;
+	    nbytes -= f->length;
+
 	    switch (f->class) {
 	    case KbdFeedbackClass:
 		size += sizeof(XKbdFeedbackState);
@@ -116,6 +126,8 @@ XGetFeedbackControl(
 	    {
 		xStringFeedbackState *strf = (xStringFeedbackState *) f;
 
+		if (strf->num_syms_supported >= (INT_MAX / sizeof(KeySym)))
+		    goto out;
 		size += sizeof(XStringFeedbackState) +
 		    (strf->num_syms_supported * sizeof(KeySym));
 	    }
@@ -130,10 +142,12 @@ XGetFeedbackControl(
 		size += f->length;
 		break;
 	    }
+	    if (size > INT_MAX)
+		goto out;
 	    f = (xFeedbackState *) ((char *)f + f->length);
 	}
 
-	Feedback = (XFeedbackState *) Xmalloc((unsigned)size);
+	Feedback = Xmalloc(size);
 	if (!Feedback) {
 	    UnlockDisplay(dpy);
 	    SyncHandle();
@@ -253,8 +267,9 @@ XGetFeedbackControl(
 	    f = (xFeedbackState *) ((char *)f + f->length);
 	    Feedback = (XFeedbackState *) ((char *)Feedback + Feedback->length);
 	}
-	XFree((char *)sav);
     }
+out:
+    XFree((char *)sav);
 
     UnlockDisplay(dpy);
     SyncHandle();

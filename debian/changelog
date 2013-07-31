@@ -1,3 +1,18 @@
+libxi (2:1.3-8) oldstable-security; urgency=low
+
+  * CVE-2013-1984 CVE-2013-1995 CVE-2013-1998
+
+ -- Moritz Muehlenhoff <jmm@debian.org>  Sat, 18 May 2013 20:23:57 +0000
+
+libxi (2:1.3-7) squeeze; urgency=low
+
+  * Cherry-pick patches from upstream:
+    - Fix passive grabs
+    - Fill in mods/group->effective in XIQueryPointer
+    - Handle unknown device classes (closes: #661021, #660411)
+
+ -- Julien Cristau <jcristau@debian.org>  Wed, 02 May 2012 23:46:50 +0200
+
 libxi (2:1.3-6) unstable; urgency=medium
 
   * WireToEvent: Set display member of all events as well (cherry-pick from
