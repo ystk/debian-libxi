@@ -30,6 +30,9 @@ in this Software without prior written authorization from the author.
  *
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <stdint.h>
 #include <X11/Xlibint.h>
@@ -48,11 +51,14 @@ XISelectEvents(Display* dpy, Window win, XIEventMask* masks, int num_masks)
     xXIEventMask mask;
     int i;
     int len = 0;
+    int r = Success;
 
     XExtDisplayInfo *info = XInput_find_display(dpy);
     LockDisplay(dpy);
-    if (_XiCheckExtInit(dpy, Dont_Check, info) == -1)
-	return (NoSuchExtension);
+    if (_XiCheckExtInit(dpy, XInput_2_0, info) == -1) {
+        r = NoSuchExtension;
+        goto out;
+    }
     GetReq(XISelectEvents, req);
 
     req->reqType = info->codes->major_opcode;
@@ -80,14 +86,15 @@ XISelectEvents(Display* dpy, Window win, XIEventMask* masks, int num_masks)
          * and they need to be padded with 0 */
         buff = calloc(1, mask.mask_len * 4);
         memcpy(buff, current->mask, current->mask_len);
-        Data32(dpy, &mask, sizeof(xXIEventMask));
+        Data(dpy, (char*)&mask, sizeof(xXIEventMask));
         Data(dpy, buff, mask.mask_len * 4);
         free(buff);
     }
 
+out:
     UnlockDisplay(dpy);
     SyncHandle();
-    return Success;
+    return r;
 
 }
 
@@ -100,14 +107,12 @@ XIGetSelectedEvents(Display* dpy, Window win, int *num_masks_return)
     xXIEventMask *mask_in = NULL, *mi;
     xXIGetSelectedEventsReq *req;
     xXIGetSelectedEventsReply reply;
-
     XExtDisplayInfo *info = XInput_find_display(dpy);
+
+    *num_masks_return = -1;
     LockDisplay(dpy);
-    if (_XiCheckExtInit(dpy, Dont_Check, info) == -1)
-    {
-        *num_masks_return = -1;
-	return NULL;
-    }
+    if (_XiCheckExtInit(dpy, XInput_2_0, info) == -1)
+        goto out;
 
     GetReq(XIGetSelectedEvents, req);
 
@@ -116,17 +121,17 @@ XIGetSelectedEvents(Display* dpy, Window win, int *num_masks_return)
     req->win = win;
 
     if (!_XReply(dpy, (xReply *) &reply, 0, xFalse))
-        goto error;
+        goto out;
 
     if (reply.num_masks == 0)
     {
         *num_masks_return = 0;
-        return NULL;
+        goto out;
     }
 
     mask_in = Xmalloc(reply.length * 4);
     if (!mask_in)
-        goto error;
+        goto out;
 
     _XRead(dpy, (char*)mask_in, reply.length * 4);
 
@@ -144,7 +149,7 @@ XIGetSelectedEvents(Display* dpy, Window win, int *num_masks_return)
 
     mask_out = Xmalloc(len);
     if (!mask_out)
-        goto error;
+        goto out;
 
     mi = mask_in;
     mask = (unsigned char*)&mask_out[reply.num_masks];
@@ -161,14 +166,11 @@ XIGetSelectedEvents(Display* dpy, Window win, int *num_masks_return)
 
     *num_masks_return = reply.num_masks;
 
-    return mask_out;
+out:
+    Xfree(mask_in);
 
-error:
-    if (mask_in)
-        Xfree(mask_in);
-    *num_masks_return = -1;
     UnlockDisplay(dpy);
     SyncHandle();
-    return NULL;
 
+    return mask_out;
 }

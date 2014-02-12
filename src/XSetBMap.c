@@ -49,6 +49,9 @@ SOFTWARE.
  * XSetDeviceButtonMapping - Set the button mapping of an extension device.
  *
  */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <X11/extensions/XI.h>
 #include <X11/extensions/XIproto.h>
@@ -56,7 +59,6 @@ SOFTWARE.
 #include <X11/extensions/XInput.h>
 #include <X11/extensions/extutil.h>
 #include "XIint.h"
-#define NEED_REPLIES
 
 /* returns either  DeviceMappingSuccess or DeviceMappingBusy  */
 

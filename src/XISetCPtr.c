@@ -32,6 +32,9 @@ in this Software without prior written authorization from The Open Group.
  * Ideally, the window manager will always send a SetClientPointer request
  * before the client interacts with an application.
  */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <stdint.h>
 #include <X11/extensions/XI2proto.h>
@@ -40,14 +43,14 @@ in this Software without prior written authorization from The Open Group.
 #include <X11/extensions/extutil.h>
 #include "XIint.h"
 
-Status 
+Status
 XISetClientPointer(Display* dpy, Window win, int deviceid)
 {
     xXISetClientPointerReq* req;
     XExtDisplayInfo *info = XInput_find_display(dpy);
 
     LockDisplay(dpy);
-    if (_XiCheckExtInit(dpy, Dont_Check, info) == -1)
+    if (_XiCheckExtInit(dpy, XInput_2_0, info) == -1)
 	return (NoSuchExtension);
 
     GetReq(XISetClientPointer, req);
