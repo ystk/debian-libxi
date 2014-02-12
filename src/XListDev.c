@@ -50,17 +50,30 @@ SOFTWARE.
  *			 available input devices.
  *
  */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
-#define NEED_REPLIES
-#define NEED_EVENTS
 #include <X11/extensions/XI.h>
 #include <X11/extensions/XIproto.h>
 #include <X11/Xlibint.h>
 #include <X11/extensions/XInput.h>
 #include <X11/extensions/extutil.h>
 #include "XIint.h"
+#include <limits.h>
 
-static int
+/* Calculate length field to a multiples of sizeof(XID). XIDs are typedefs
+ * to ulong and thus may be 8 bytes on some platforms. This can trigger a
+ * SIGBUS if a class ends up not being 8-aligned (e.g. after XAxisInfo).
+ */
+static int pad_to_xid(int base_size)
+{
+    int padsize = sizeof(XID);
+
+    return ((base_size + padsize - 1)/padsize) * padsize;
+}
+
+static size_t
 SizeClassInfo(xAnyClassPtr *any, int num_classes)
 {
     int size = 0;
@@ -68,18 +81,18 @@ SizeClassInfo(xAnyClassPtr *any, int num_classes)
     for (j = 0; j < num_classes; j++) {
         switch ((*any)->class) {
             case KeyClass:
-                size += sizeof(XKeyInfo);
+                size += pad_to_xid(sizeof(XKeyInfo));
                 break;
             case ButtonClass:
-                size += sizeof(XButtonInfo);
+                size += pad_to_xid(sizeof(XButtonInfo));
                 break;
             case ValuatorClass:
                 {
                     xValuatorInfoPtr v;
 
                     v = (xValuatorInfoPtr) *any;
-                    size += sizeof(XValuatorInfo) +
-                        (v->num_axes * sizeof(XAxisInfo));
+                    size += pad_to_xid(sizeof(XValuatorInfo) +
+                        (v->num_axes * sizeof(XAxisInfo)));
                     break;
                 }
             default:
@@ -104,7 +117,7 @@ ParseClassInfo(xAnyClassPtr *any, XAnyClassPtr *Any, int num_classes)
                     xKeyInfoPtr k = (xKeyInfoPtr) *any;
 
                     K->class = KeyClass;
-                    K->length = sizeof(XKeyInfo);
+                    K->length = pad_to_xid(sizeof(XKeyInfo));
                     K->min_keycode = k->min_keycode;
                     K->max_keycode = k->max_keycode;
                     K->num_keys = k->num_keys;
@@ -116,7 +129,7 @@ ParseClassInfo(xAnyClassPtr *any, XAnyClassPtr *Any, int num_classes)
                     xButtonInfoPtr b = (xButtonInfoPtr) *any;
 
                     B->class = ButtonClass;
-                    B->length = sizeof(XButtonInfo);
+                    B->length = pad_to_xid(sizeof(XButtonInfo));
                     B->num_buttons = b->num_buttons;
                     break;
                 }
@@ -128,8 +141,8 @@ ParseClassInfo(xAnyClassPtr *any, XAnyClassPtr *Any, int num_classes)
                     xAxisInfoPtr a;
 
                     V->class = ValuatorClass;
-                    V->length = sizeof(XValuatorInfo) +
-                        (v->num_axes * sizeof(XAxisInfo));
+                    V->length = pad_to_xid(sizeof(XValuatorInfo) +
+                        (v->num_axes * sizeof(XAxisInfo)));
                     V->num_axes = v->num_axes;
                     V->motion_buffer = v->motion_buffer_size;
                     V->mode = v->mode;
@@ -156,7 +169,7 @@ XListInputDevices(
     register Display	*dpy,
     int			*ndevices)
 {
-    int size;
+    size_t size;
     xListInputDevicesReq *req;
     xListInputDevicesReply rep;
     xDeviceInfo *list, *slist = NULL;
@@ -164,9 +177,9 @@ XListInputDevices(
     XDeviceInfo *clist = NULL;
     xAnyClassPtr any, sav_any;
     XAnyClassPtr Any;
-    char *nptr, *Nptr;
+    unsigned char *nptr, *Nptr;
     int i;
-    long rlen;
+    unsigned long rlen;
     XExtDisplayInfo *info = XInput_find_display(dpy);
 
     LockDisplay(dpy);
@@ -185,11 +198,12 @@ XListInputDevices(
 
     if ((*ndevices = rep.ndevices)) {	/* at least 1 input device */
 	size = *ndevices * sizeof(XDeviceInfo);
-	rlen = rep.length << 2;	/* multiply length by 4    */
-	list = (xDeviceInfo *) Xmalloc(rlen);
-	slist = list;
+	if (rep.length < (INT_MAX >> 2)) {
+	    rlen = rep.length << 2;	/* multiply length by 4    */
+	    slist = list = Xmalloc(rlen);
+	}
 	if (!slist) {
-	    _XEatData(dpy, (unsigned long)rlen);
+	    _XEatDataWords(dpy, rep.length);
 	    UnlockDisplay(dpy);
 	    SyncHandle();
 	    return (XDeviceInfo *) NULL;
@@ -202,9 +216,12 @@ XListInputDevices(
             size += SizeClassInfo(&any, (int)list->num_classes);
 	}
 
-	for (i = 0, nptr = (char *)any; i < *ndevices; i++) {
+	Nptr = ((unsigned char *)list) + rlen + 1;
+	for (i = 0, nptr = (unsigned char *)any; i < *ndevices; i++) {
 	    size += *nptr + 1;
 	    nptr += (*nptr + 1);
+	    if (nptr > Nptr)
+		goto out;
 	}
 
 	clist = (XDeviceInfoPtr) Xmalloc(size);
@@ -230,8 +247,8 @@ XListInputDevices(
 	}
 
 	clist = sclist;
-	nptr = (char *)any;
-	Nptr = (char *)Any;
+	nptr = (unsigned char *)any;
+	Nptr = (unsigned char *)Any;
 	for (i = 0; i < *ndevices; i++, clist++) {
 	    clist->name = (char *)Nptr;
 	    memcpy(Nptr, nptr + 1, *nptr);
@@ -241,6 +258,7 @@ XListInputDevices(
 	}
     }
 
+  out:
     XFree((char *)slist);
     UnlockDisplay(dpy);
     SyncHandle();

@@ -38,6 +38,7 @@
 #include <X11/extensions/XInput2.h>
 #include <X11/extensions/extutil.h>
 #include "XIint.h"
+#include <limits.h>
 
 Atom*
 XIListProperties(Display* dpy, int deviceid, int *num_props_return)
@@ -49,7 +50,7 @@ XIListProperties(Display* dpy, int deviceid, int *num_props_return)
 
     LockDisplay(dpy);
     *num_props_return = 0;
-    if (_XiCheckExtInit(dpy, Dont_Check, info) == -1)
+    if (_XiCheckExtInit(dpy, XInput_2_0, info) == -1)
 	goto cleanup;
 
     GetReq(XIListProperties, req);
@@ -64,7 +65,7 @@ XIListProperties(Display* dpy, int deviceid, int *num_props_return)
         props = (Atom*)Xmalloc(rep.num_properties * sizeof(Atom));
         if (!props)
         {
-            _XEatData(dpy, rep.num_properties << 2);
+            _XEatDataWords(dpy, rep.length);
             goto cleanup;
         }
 
@@ -88,7 +89,7 @@ XIDeleteProperty(Display* dpy, int deviceid, Atom property)
     XExtDisplayInfo *info = XInput_find_display(dpy);
 
     LockDisplay(dpy);
-    if (_XiCheckExtInit(dpy, Dont_Check, info) == -1)
+    if (_XiCheckExtInit(dpy, XInput_2_0, info) == -1)
 	return;
 
     GetReq(XIDeleteProperty, req);
@@ -111,7 +112,7 @@ XIChangeProperty(Display* dpy, int deviceid, Atom property, Atom type,
     XExtDisplayInfo *info = XInput_find_display(dpy);
 
     LockDisplay(dpy);
-    if (_XiCheckExtInit(dpy, Dont_Check, info) == -1)
+    if (_XiCheckExtInit(dpy, XInput_2_0, info) == -1)
 	return;
 
     GetReq(XIChangeProperty, req);
@@ -170,12 +171,12 @@ XIGetProperty(Display* dpy, int deviceid, Atom property, long offset,
 {
     xXIGetPropertyReq   *req;
     xXIGetPropertyReply rep;
-    long                    nbytes, rbytes;
+    unsigned long       nbytes, rbytes;
 
     XExtDisplayInfo *info = XInput_find_display(dpy);
 
     LockDisplay(dpy);
-    if (_XiCheckExtInit(dpy, Dont_Check, info) == -1)
+    if (_XiCheckExtInit(dpy, XInput_2_0, info) == -1)
 	return 1;
 
     GetReq(XIGetProperty, req);
@@ -203,8 +204,7 @@ XIGetProperty(Display* dpy, int deviceid, Atom property, long offset,
 	     * This part of the code should never be reached.  If it is,
 	     * the server sent back a property with an invalid format.
 	     */
-	    nbytes = rep.length << 2;
-	    _XEatData(dpy, nbytes);
+	    _XEatDataWords(dpy, rep.length);
 	    UnlockDisplay(dpy);
 	    SyncHandle();
 	    return(BadImplementation);
@@ -217,12 +217,14 @@ XIGetProperty(Display* dpy, int deviceid, Atom property, long offset,
 	 * recopy the string to make it null terminated.
 	 */
 
-        nbytes = rep.num_items * rep.format/8;
-        rbytes = nbytes + 1;
-        *data = Xmalloc(rbytes);
+	if (rep.num_items < (INT_MAX / (rep.format/8))) {
+	    nbytes = rep.num_items * rep.format/8;
+	    rbytes = nbytes + 1;
+	    *data = Xmalloc(rbytes);
+	}
 
 	if (!(*data)) {
-	    _XEatData(dpy, nbytes);
+	    _XEatDataWords(dpy, rep.length);
 	    UnlockDisplay(dpy);
 	    SyncHandle();
 	    return(BadAlloc);

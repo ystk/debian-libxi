@@ -49,8 +49,9 @@ SOFTWARE.
  *	XExtToWire.c - reformat an XEvent into a wire event.
  */
 
-#define NEED_EVENTS
-#define NEED_REPLIES
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <X11/extensions/XIproto.h>
 #include <X11/Xlibint.h>

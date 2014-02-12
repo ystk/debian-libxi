@@ -50,6 +50,10 @@ SOFTWARE.
  *
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <X11/extensions/XI.h>
 #include <X11/extensions/XIproto.h>
 #include <X11/Xlibint.h>
@@ -95,7 +99,7 @@ XGetDeviceKeyMapping(register Display * dpy, XDevice * dev,
 	if (mapping)
 	    _XRead(dpy, (char *)mapping, nbytes);
 	else
-	    _XEatData(dpy, (unsigned long)nbytes);
+	    _XEatDataWords(dpy, rep.length);
     }
 
     UnlockDisplay(dpy);

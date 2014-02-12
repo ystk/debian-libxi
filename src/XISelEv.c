@@ -30,6 +30,9 @@ in this Software without prior written authorization from the author.
  *
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <stdint.h>
 #include <X11/Xlibint.h>
@@ -39,6 +42,7 @@ in this Software without prior written authorization from the author.
 #include <X11/extensions/ge.h>
 #include <X11/extensions/geproto.h>
 #include "XIint.h"
+#include <limits.h>
 
 int
 XISelectEvents(Display* dpy, Window win, XIEventMask* masks, int num_masks)
@@ -52,7 +56,7 @@ XISelectEvents(Display* dpy, Window win, XIEventMask* masks, int num_masks)
 
     XExtDisplayInfo *info = XInput_find_display(dpy);
     LockDisplay(dpy);
-    if (_XiCheckExtInit(dpy, Dont_Check, info) == -1) {
+    if (_XiCheckExtInit(dpy, XInput_2_0, info) == -1) {
         r = NoSuchExtension;
         goto out;
     }
@@ -83,7 +87,7 @@ XISelectEvents(Display* dpy, Window win, XIEventMask* masks, int num_masks)
          * and they need to be padded with 0 */
         buff = calloc(1, mask.mask_len * 4);
         memcpy(buff, current->mask, current->mask_len);
-        Data32(dpy, &mask, sizeof(xXIEventMask));
+        Data(dpy, (char*)&mask, sizeof(xXIEventMask));
         Data(dpy, buff, mask.mask_len * 4);
         free(buff);
     }
@@ -98,17 +102,18 @@ out:
 XIEventMask*
 XIGetSelectedEvents(Display* dpy, Window win, int *num_masks_return)
 {
-    int i, len = 0;
+    unsigned int i, len = 0;
     unsigned char *mask;
     XIEventMask *mask_out = NULL;
     xXIEventMask *mask_in = NULL, *mi;
     xXIGetSelectedEventsReq *req;
     xXIGetSelectedEventsReply reply;
+    XExtDisplayInfo *info = XInput_find_display(dpy);
+    size_t rbytes;
 
     *num_masks_return = -1;
-    XExtDisplayInfo *info = XInput_find_display(dpy);
     LockDisplay(dpy);
-    if (_XiCheckExtInit(dpy, Dont_Check, info) == -1)
+    if (_XiCheckExtInit(dpy, XInput_2_0, info) == -1)
         goto out;
 
     GetReq(XIGetSelectedEvents, req);
@@ -126,11 +131,16 @@ XIGetSelectedEvents(Display* dpy, Window win, int *num_masks_return)
         goto out;
     }
 
-    mask_in = Xmalloc(reply.length * 4);
-    if (!mask_in)
+    if (reply.length < (INT_MAX >> 2)) {
+        rbytes = (unsigned long) reply.length << 2;
+        mask_in = Xmalloc(rbytes);
+    }
+    if (!mask_in) {
+        _XEatDataWords(dpy, reply.length);
         goto out;
+    }
 
-    _XRead(dpy, (char*)mask_in, reply.length * 4);
+    _XRead(dpy, (char*)mask_in, rbytes);
 
     /* Memory layout of the XIEventMask for a 3 mask reply:
      * [struct a][struct b][struct c][masks a][masks b][masks c]
@@ -139,8 +149,14 @@ XIGetSelectedEvents(Display* dpy, Window win, int *num_masks_return)
 
     for (i = 0, mi = mask_in; i < reply.num_masks; i++)
     {
-        len += mi->mask_len * 4;
-        mi = (xXIEventMask*)((char*)mi + mi->mask_len * 4);
+        unsigned int mask_bytes = mi->mask_len * 4;
+        len += mask_bytes;
+        if (len > INT_MAX)
+            goto out;
+        if ((sizeof(xXIEventMask) + mask_bytes) > rbytes)
+            goto out;
+        rbytes -= (sizeof(xXIEventMask) + mask_bytes);
+        mi = (xXIEventMask*)((char*)mi + mask_bytes);
         mi++;
     }
 

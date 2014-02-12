@@ -1,3 +1,131 @@
+libxi (2:1.6.1-1+deb7u1) wheezy-security; urgency=high
+
+  * integer overflows calculating memory needs for replies [CVE-2013-1984]
+  * sign extension issue in XListInputDevices() [CVE-2013-1995]
+  * buffer overflows due to not validating length or offset values in replies
+    [CVE-2013-1998]
+
+ -- Julien Cristau <jcristau@debian.org>  Wed, 15 May 2013 13:52:52 +0200
+
+libxi (2:1.6.1-1) unstable; urgency=low
+
+  [ Julien Cristau ]
+  * Don't require (fake)root for debian/rules clean.
+
+  [ Cyril Brulebois ]
+  * New upstream release.
+
+ -- Cyril Brulebois <kibi@debian.org>  Sun, 20 May 2012 17:00:03 +0200
+
+libxi (2:1.6.0-1) unstable; urgency=low
+
+  [ Chase Douglas ]
+  * New upstream release
+    - Fix bus error on MIPS N32 (closes: #636920)
+  * Bump build deps on x11proto-input-dev
+  * Bump lintian standards version to 3.9.3
+
+  [ Julien Cristau ]
+  * Pull some more changes from upstream master:
+    - Fix wrong button label and mask copy on OS X (fixes regression in the
+      patch for bug#636920)
+    - Move version comparison into a helper function
+    - Set the RawEvent sourceid (#34240)
+  * Upload to unstable.
+
+ -- Julien Cristau <jcristau@debian.org>  Mon, 16 Apr 2012 19:32:32 +0200
+
+libxi (2:1.5.99.2-1) experimental; urgency=low
+
+  * New upstream release candidate:
+    - With XI 2.2 support, needed for multitouch.
+  * Fix changelog entry for 2:1.4.99.1-1:
+    - With XI 2.1 support, no multitouch yet.
+  * Bump x11proto-input-dev and libx11-dev build-deps.
+  * Update libxi6.symbols with new symbols and bump shlibs.
+
+ -- Cyril Brulebois <kibi@debian.org>  Thu, 22 Dec 2011 14:19:35 +0100
+
+libxi (2:1.5.0-1) experimental; urgency=low
+
+  * New upstream release.
+
+ -- Cyril Brulebois <kibi@debian.org>  Wed, 21 Dec 2011 10:12:07 +0100
+
+libxi (2:1.4.99.1-1) experimental; urgency=low
+
+  * New upstream release candidate:
+    - With XI 2.1 support.
+  * Update build dependencies accordingly:
+    - Bump xutils-dev, x11proto-input-dev, xorg-sgml-doctools.
+    - Add xsltproc.
+  * Update libxi-dev.install: specs/ and docs/ have been merged.
+  * Don't install *.db yet.
+  * Add -c4 to dh_makeshlibs.
+
+ -- Cyril Brulebois <kibi@debian.org>  Thu, 15 Dec 2011 15:05:46 +0100
+
+libxi (2:1.4.3-3) unstable; urgency=low
+
+  * Team upload.
+  * Don't ship debug symbols for the udeb in libxi6-dbg.
+  * Add build-{arch,indep} debian/rules targets.
+
+ -- Julien Cristau <jcristau@debian.org>  Sun, 12 Jun 2011 00:20:23 +0200
+
+libxi (2:1.4.3-2) unstable; urgency=low
+
+  * Team upload.
+
+  [ Steve Langasek ]
+  * Build for multiarch.
+
+  [ Julien Cristau ]
+  * Remove David Nusinow from Uploaders.
+
+ -- Julien Cristau <jcristau@debian.org>  Sat, 11 Jun 2011 16:14:32 +0200
+
+libxi (2:1.4.3-1) unstable; urgency=low
+
+  * New upstream release.
+  * Add a comment to the series file so that it isn't eaten by
+    dpkg-source.
+  * Bump Standards-Version (no changes).
+
+ -- Cyril Brulebois <kibi@debian.org>  Thu, 09 Jun 2011 12:08:59 +0200
+
+libxi (2:1.4.2-1) unstable; urgency=low
+
+  [ Julien Cristau ]
+  * Bump Standards-Version to 3.9.1 (no changes).
+
+  [ Cyril Brulebois ]
+  * New upstream release.
+
+ -- Cyril Brulebois <kibi@debian.org>  Sun, 27 Mar 2011 06:36:41 +0200
+
+libxi (2:1.4.1-1) unstable; urgency=low
+
+  * New upstream release.
+  * Use xorg-sgml-doctool's copy of xorg.css.
+  * Upload to unstable.
+
+ -- Julien Cristau <jcristau@debian.org>  Tue, 08 Feb 2011 00:04:32 +0100
+
+libxi (2:1.4.0-1) experimental; urgency=low
+
+  * New upstream release.
+  * Update debian/copyright from upstream COPYING.
+  * Bump xutils-dev build-dep for new macros.
+  * Pass --with-xmlto and --without-fop to configure.
+  * Add xmlto, xorg-sgml-doctools, and w3m build-dep accordingly.
+  * Switch dh_install from --list-missing to --fail-missing for added
+    safety.
+  * Get rid of *.xml files before running dh_install.
+  * Ship *.html, *.txt, *.css in libxi-dev.
+
+ -- Cyril Brulebois <kibi@debian.org>  Fri, 14 Jan 2011 06:22:37 +0100
+
 libxi (2:1.3-6) unstable; urgency=medium
 
   * WireToEvent: Set display member of all events as well (cherry-pick from

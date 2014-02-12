@@ -49,6 +49,9 @@ SOFTWARE.
  * XQueryDeviceState - Query the state of an extension input device.
  *
  */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <X11/extensions/XI.h>
 #include <X11/extensions/XIproto.h>
@@ -56,6 +59,7 @@ SOFTWARE.
 #include <X11/extensions/XInput.h>
 #include <X11/extensions/extutil.h>
 #include "XIint.h"
+#include <limits.h>
 
 XDeviceState *
 XQueryDeviceState(
@@ -63,13 +67,13 @@ XQueryDeviceState(
     XDevice		*dev)
 {
     int i, j;
-    int rlen;
-    int size = 0;
+    unsigned long rlen;
+    size_t size = 0;
     xQueryDeviceStateReq *req;
     xQueryDeviceStateReply rep;
     XDeviceState *state = NULL;
     XInputClass *any, *Any;
-    char *data;
+    char *data = NULL;
     XExtDisplayInfo *info = XInput_find_display(dpy);
 
     LockDisplay(dpy);
@@ -81,24 +85,25 @@ XQueryDeviceState(
     req->ReqType = X_QueryDeviceState;
     req->deviceid = dev->device_id;
 
-    if (!_XReply(dpy, (xReply *) & rep, 0, xFalse)) {
-	UnlockDisplay(dpy);
-	SyncHandle();
-	return (XDeviceState *) NULL;
-    }
+    if (!_XReply(dpy, (xReply *) & rep, 0, xFalse))
+        goto out;
 
-    rlen = rep.length << 2;
-    if (rlen > 0) {
-	data = Xmalloc(rlen);
+    if (rep.length > 0) {
+	if (rep.length < (INT_MAX >> 2)) {
+	    rlen = (unsigned long) rep.length << 2;
+	    data = Xmalloc(rlen);
+	}
 	if (!data) {
-	    _XEatData(dpy, (unsigned long)rlen);
-	    UnlockDisplay(dpy);
-	    SyncHandle();
-	    return ((XDeviceState *) NULL);
+	    _XEatDataWords(dpy, rep.length);
+	    goto out;
 	}
 	_XRead(dpy, data, rlen);
 
 	for (i = 0, any = (XInputClass *) data; i < (int)rep.num_classes; i++) {
+	    if (any->length > rlen)
+		goto out;
+	    rlen -= any->length;
+
 	    switch (any->class) {
 	    case KeyClass:
 		size += sizeof(XKeyState);
@@ -117,11 +122,9 @@ XQueryDeviceState(
 	    any = (XInputClass *) ((char *)any + any->length);
 	}
 	state = (XDeviceState *) Xmalloc(size + sizeof(XDeviceState));
-	if (!state) {
-	    UnlockDisplay(dpy);
-	    SyncHandle();
-	    return ((XDeviceState *) NULL);
-	}
+	if (!state)
+            goto out;
+
 	state->device_id = dev->device_id;
 	state->num_classes = rep.num_classes;
 	state->data = (XInputClass *) (state + 1);
@@ -175,8 +178,9 @@ XQueryDeviceState(
 	    }
 	    any = (XInputClass *) ((char *)any + any->length);
 	}
-	Xfree(data);
     }
+out:
+    Xfree(data);
 
     UnlockDisplay(dpy);
     SyncHandle();

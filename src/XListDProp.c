@@ -65,11 +65,11 @@ XListDeviceProperties(Display* dpy, XDevice* dev, int *nprops_return)
         props = (Atom*)Xmalloc(rep.nAtoms * sizeof(Atom));
         if (!props)
         {
-            _XEatData(dpy, rep.nAtoms << 2);
+            _XEatDataWords(dpy, rep.length);
             goto cleanup;
         }
 
-        _XRead32(dpy, props, rep.nAtoms << 2);
+        _XRead32(dpy, (long*)props, rep.nAtoms << 2);
     }
 
     *nprops_return = rep.nAtoms;

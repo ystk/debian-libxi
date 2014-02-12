@@ -50,6 +50,10 @@ SOFTWARE.
  *
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <X11/extensions/XI.h>
 #include <X11/extensions/XIproto.h>
 #include <X11/Xlibint.h>
@@ -57,6 +61,7 @@ SOFTWARE.
 #include <X11/extensions/XInput.h>
 #include <X11/extensions/extutil.h>
 #include "XIint.h"
+#include <limits.h>
 
 XDeviceControl *
 XGetDeviceControl(
@@ -64,8 +69,6 @@ XGetDeviceControl(
     XDevice		*dev,
     int			 control)
 {
-    int size = 0;
-    int nbytes, i;
     XDeviceControl *Device = NULL;
     XDeviceControl *Sav = NULL;
     xDeviceState *d = NULL;
@@ -84,19 +87,19 @@ XGetDeviceControl(
     req->deviceid = dev->device_id;
     req->control = control;
 
-    if (!_XReply(dpy, (xReply *) & rep, 0, xFalse)) {
-	UnlockDisplay(dpy);
-	SyncHandle();
-	return (XDeviceControl *) NULL;
-    }
+    if (!_XReply(dpy, (xReply *) & rep, 0, xFalse))
+	goto out;
+
     if (rep.length > 0) {
-	nbytes = (long)rep.length << 2;
-	d = (xDeviceState *) Xmalloc((unsigned)nbytes);
+	unsigned long nbytes;
+	size_t size = 0;
+	if (rep.length < (INT_MAX >> 2)) {
+	    nbytes = (unsigned long) rep.length << 2;
+	    d = Xmalloc(nbytes);
+	}
 	if (!d) {
-	    _XEatData(dpy, (unsigned long)nbytes);
-	    UnlockDisplay(dpy);
-	    SyncHandle();
-	    return (XDeviceControl *) NULL;
+	    _XEatDataWords(dpy, rep.length);
+	    goto out;
 	}
 	sav = d;
 	_XRead(dpy, (char *)d, nbytes);
@@ -111,38 +114,49 @@ XGetDeviceControl(
 	case DEVICE_RESOLUTION:
 	{
 	    xDeviceResolutionState *r;
+	    size_t val_size;
 
 	    r = (xDeviceResolutionState *) d;
-	    size += sizeof(XDeviceResolutionState) +
-		(3 * sizeof(int) * r->num_valuators);
+	    if (r->num_valuators >= (INT_MAX / (3 * sizeof(int))))
+		goto out;
+	    val_size = 3 * sizeof(int) * r->num_valuators;
+	    if ((sizeof(xDeviceResolutionState) + val_size) > nbytes)
+		goto out;
+	    size += sizeof(XDeviceResolutionState) + val_size;
 	    break;
 	}
         case DEVICE_ABS_CALIB:
         {
+            if (sizeof(xDeviceAbsCalibState) > nbytes)
+                goto out;
             size += sizeof(XDeviceAbsCalibState);
             break;
         }
         case DEVICE_ABS_AREA:
         {
+            if (sizeof(xDeviceAbsAreaState) > nbytes)
+                goto out;
             size += sizeof(XDeviceAbsAreaState);
             break;
         }
         case DEVICE_CORE:
         {
+            if (sizeof(xDeviceCoreState) > nbytes)
+                goto out;
             size += sizeof(XDeviceCoreState);
             break;
         }
 	default:
+	    if (d->length > nbytes)
+		goto out;
 	    size += d->length;
 	    break;
 	}
 
-	Device = (XDeviceControl *) Xmalloc((unsigned)size);
-	if (!Device) {
-	    UnlockDisplay(dpy);
-	    SyncHandle();
-	    return (XDeviceControl *) NULL;
-	}
+	Device = Xmalloc(size);
+	if (!Device)
+	    goto out;
+
 	Sav = Device;
 
 	d = sav;
@@ -152,6 +166,7 @@ XGetDeviceControl(
 	    int *iptr, *iptr2;
 	    xDeviceResolutionState *r;
 	    XDeviceResolutionState *R;
+	    unsigned int i;
 
 	    r = (xDeviceResolutionState *) d;
 	    R = (XDeviceResolutionState *) Device;
@@ -228,8 +243,9 @@ XGetDeviceControl(
 	default:
 	    break;
 	}
-	XFree(sav);
     }
+out:
+    XFree(sav);
 
     UnlockDisplay(dpy);
     SyncHandle();

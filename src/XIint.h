@@ -1,5 +1,3 @@
-/* $XFree86: xc/lib/Xi/XIint.h,v 3.2 2003/07/07 15:34:22 eich Exp $ */
-
 /*
  *	XIint.h - Header definition and support file for the internal
  *	support routines used by the Xi library.
@@ -9,9 +7,26 @@
 #define _XIINT_H_
 #include <X11/extensions/XI.h>
 
+/* inputproto 2.0 still shipped with these defined in the proto headers */
+#ifndef XInput_Initial_Release
+/* Indices into the versions[] array (XExtInt.c). Used as a index to
+ * retrieve the minimum version of XI from _XiCheckExtInit */
+#define Dont_Check			0
+#define XInput_Initial_Release		1
+#define XInput_Add_XDeviceBell		2
+#define XInput_Add_XSetDeviceValuators	3
+#define XInput_Add_XChangeDeviceControl	4
+#define XInput_Add_DevicePresenceNotify	5
+#define XInput_Add_DeviceProperties	6
+#define XInput_2_0			7
+#endif
+#define XInput_2_1			8
+#define XInput_2_2			9
+
 extern XExtDisplayInfo *XInput_find_display(Display *);
 
 extern int _XiCheckExtInit(Display *, int, XExtDisplayInfo *);
+extern int _XiCheckVersion(XExtDisplayInfo *info, int version_index);
 
 extern XExtensionVersion *_XiGetExtensionVersion(Display *, _Xconst char *, XExtDisplayInfo *);
 extern XExtensionVersion* _XiGetExtensionVersionRequest(Display *dpy, _Xconst char *name, int xi_opcode);
@@ -66,5 +81,19 @@ next_block(void **ptr, int size) {
 
     return ret;
 }
+
+#ifndef HAVE__XEATDATAWORDS
+#include <X11/Xmd.h>  /* for LONG64 on 64-bit platforms */
+#include <limits.h>
+
+static inline void _XEatDataWords(Display *dpy, unsigned long n)
+{
+# ifndef LONG64
+    if (n >= (ULONG_MAX >> 2))
+        _XIOError(dpy);
+# endif
+    _XEatData (dpy, n << 2);
+}
+#endif
 
 #endif

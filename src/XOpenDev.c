@@ -49,6 +49,9 @@ SOFTWARE.
  * XOpenDevice - Request the server to open and extension input device.
  *
  */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <X11/extensions/XI.h>
 #include <X11/extensions/XIproto.h>
@@ -98,7 +101,7 @@ XOpenDevice(
 	if (rlen - dlen > 0)
 	    _XEatData(dpy, (unsigned long)rlen - dlen);
     } else
-	_XEatData(dpy, (unsigned long)rlen);
+	_XEatDataWords(dpy, rep.length);
 
     UnlockDisplay(dpy);
     SyncHandle();

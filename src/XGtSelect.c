@@ -49,6 +49,9 @@ SOFTWARE.
  * XGetSelectedExtensionEvents - return a list of currently selected events.
  *
  */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <X11/extensions/XI.h>
 #include <X11/extensions/XIproto.h>
@@ -101,7 +104,7 @@ XGetSelectedExtensionEvents(
 		(XEventClass *) Xmalloc(*this_client_count *
 					sizeof(XEventClass));
 	    if (!*this_client_list) {
-		_XEatData(dpy, (unsigned long)tlen + alen);
+		_XEatDataWords(dpy, rep.length);
                 UnlockDisplay(dpy);
                 SyncHandle();
 		return (Success);

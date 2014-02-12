@@ -49,6 +49,9 @@ SOFTWARE.
  * XGetDeviceModifierMapping - get the modifier map of an extension device.
  *
  */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <X11/extensions/XI.h>
 #include <X11/extensions/XIproto.h>
@@ -89,7 +92,7 @@ XGetDeviceModifierMapping(
 	if (res->modifiermap)
 	    _XReadPad(dpy, (char *)res->modifiermap, nbytes);
 	else
-	    _XEatData(dpy, (unsigned long)nbytes);
+	    _XEatDataWords(dpy, rep.length);
 	res->max_keypermod = rep.numKeyPerModifier;
     }
 
