@@ -22,6 +22,7 @@
 #endif
 #define XInput_2_1			8
 #define XInput_2_2			9
+#define XInput_2_3			10
 
 extern XExtDisplayInfo *XInput_find_display(Display *);
 
@@ -82,18 +83,5 @@ next_block(void **ptr, int size) {
     return ret;
 }
 
-#ifndef HAVE__XEATDATAWORDS
-#include <X11/Xmd.h>  /* for LONG64 on 64-bit platforms */
-#include <limits.h>
-
-static inline void _XEatDataWords(Display *dpy, unsigned long n)
-{
-# ifndef LONG64
-    if (n >= (ULONG_MAX >> 2))
-        _XIOError(dpy);
-# endif
-    _XEatData (dpy, n << 2);
-}
-#endif
 
 #endif
