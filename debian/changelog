@@ -1,3 +1,11 @@
+libxi (2:1.7.4-1+deb8u1) jessie; urgency=medium
+
+  * Insufficient validation of data from the X server can cause out of
+    boundary memory access or endless loops.  Addresses CVE-2016-7945 and
+    CVE-2016-7946.
+
+ -- Julien Cristau <jcristau@debian.org>  Sat, 28 Jan 2017 16:17:42 +0100
+
 libxi (2:1.7.4-1) unstable; urgency=low
 
   * New upstream release.

@@ -73,35 +73,42 @@ static int pad_to_xid(int base_size)
     return ((base_size + padsize - 1)/padsize) * padsize;
 }
 
-static size_t
-SizeClassInfo(xAnyClassPtr *any, int num_classes)
+static int
+SizeClassInfo(xAnyClassPtr *any, size_t len, int num_classes, size_t *size)
 {
-    int size = 0;
     int j;
+    size_t sz = 0;
+
     for (j = 0; j < num_classes; j++) {
         switch ((*any)->class) {
             case KeyClass:
-                size += pad_to_xid(sizeof(XKeyInfo));
+                sz += pad_to_xid(sizeof(XKeyInfo));
                 break;
             case ButtonClass:
-                size += pad_to_xid(sizeof(XButtonInfo));
+                sz += pad_to_xid(sizeof(XButtonInfo));
                 break;
             case ValuatorClass:
                 {
                     xValuatorInfoPtr v;
 
+                    if (len < sizeof(v))
+                        return 1;
                     v = (xValuatorInfoPtr) *any;
-                    size += pad_to_xid(sizeof(XValuatorInfo) +
+                    sz += pad_to_xid(sizeof(XValuatorInfo) +
                         (v->num_axes * sizeof(XAxisInfo)));
                     break;
                 }
             default:
                 break;
         }
+        if ((*any)->length > len)
+            return 1;
         *any = (xAnyClassPtr) ((char *)(*any) + (*any)->length);
     }
 
-    return size;
+    *size = sz;
+
+    return 0;
 }
 
 static void
@@ -168,9 +175,9 @@ ParseClassInfo(xAnyClassPtr *any, XAnyClassPtr *Any, int num_classes)
 XDeviceInfo *
 XListInputDevices(
     register Display	*dpy,
-    int			*ndevices)
+    int			*ndevices_return)
 {
-    size_t size;
+    size_t s, size;
     xListInputDevicesReq *req;
     xListInputDevicesReply rep;
     xDeviceInfo *list, *slist = NULL;
@@ -178,10 +185,12 @@ XListInputDevices(
     XDeviceInfo *clist = NULL;
     xAnyClassPtr any, sav_any;
     XAnyClassPtr Any;
+    char *end = NULL;
     unsigned char *nptr, *Nptr;
     int i;
     unsigned long rlen;
     XExtDisplayInfo *info = XInput_find_display(dpy);
+    int ndevices;
 
     LockDisplay(dpy);
     if (_XiCheckExtInit(dpy, XInput_Initial_Release, info) == -1)
@@ -197,8 +206,8 @@ XListInputDevices(
 	return (XDeviceInfo *) NULL;
     }
 
-    if ((*ndevices = rep.ndevices)) {	/* at least 1 input device */
-	size = *ndevices * sizeof(XDeviceInfo);
+    if ((ndevices = rep.ndevices)) {	/* at least 1 input device */
+	size = ndevices * sizeof(XDeviceInfo);
 	if (rep.length < (INT_MAX >> 2)) {
 	    rlen = rep.length << 2;	/* multiply length by 4    */
 	    slist = list = Xmalloc(rlen);
@@ -211,18 +220,21 @@ XListInputDevices(
 	}
 	_XRead(dpy, (char *)list, rlen);
 
-	any = (xAnyClassPtr) ((char *)list + (*ndevices * sizeof(xDeviceInfo)));
+	any = (xAnyClassPtr) ((char *)list + (ndevices * sizeof(xDeviceInfo)));
 	sav_any = any;
-	for (i = 0; i < *ndevices; i++, list++) {
-            size += SizeClassInfo(&any, (int)list->num_classes);
+	end = (char *)list + rlen;
+	for (i = 0; i < ndevices; i++, list++) {
+            if(SizeClassInfo(&any, end - (char *)any, (int)list->num_classes, &s))
+                goto out;
+            size += s;
 	}
 
-	Nptr = ((unsigned char *)list) + rlen + 1;
-	for (i = 0, nptr = (unsigned char *)any; i < *ndevices; i++) {
+	Nptr = ((unsigned char *)list) + rlen;
+	for (i = 0, nptr = (unsigned char *)any; i < ndevices; i++) {
+	    if (nptr >= Nptr)
+		goto out;
 	    size += *nptr + 1;
 	    nptr += (*nptr + 1);
-	    if (nptr > Nptr)
-		goto out;
 	}
 
 	clist = (XDeviceInfoPtr) Xmalloc(size);
@@ -234,10 +246,10 @@ XListInputDevices(
 	}
 	sclist = clist;
 	Any = (XAnyClassPtr) ((char *)clist +
-			      (*ndevices * sizeof(XDeviceInfo)));
+			      (ndevices * sizeof(XDeviceInfo)));
 	list = slist;
 	any = sav_any;
-	for (i = 0; i < *ndevices; i++, list++, clist++) {
+	for (i = 0; i < ndevices; i++, list++, clist++) {
 	    clist->type = list->type;
 	    clist->id = list->id;
 	    clist->use = list->use;
@@ -250,7 +262,7 @@ XListInputDevices(
 	clist = sclist;
 	nptr = (unsigned char *)any;
 	Nptr = (unsigned char *)Any;
-	for (i = 0; i < *ndevices; i++, clist++) {
+	for (i = 0; i < ndevices; i++, clist++) {
 	    clist->name = (char *)Nptr;
 	    memcpy(Nptr, nptr + 1, *nptr);
 	    Nptr += (*nptr);
@@ -258,6 +270,8 @@ XListInputDevices(
 	    nptr += (*nptr + 1);
 	}
     }
+
+    *ndevices_return = ndevices;
 
   out:
     XFree((char *)slist);
